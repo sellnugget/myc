@@ -1,3 +1,9 @@
+int putchar(int c);
+
+int printf(int charptr, int a);
+
+int malloc(int amount);
+
 
 
 int putchar(int c);
