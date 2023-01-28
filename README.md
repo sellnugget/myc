@@ -16,4 +16,4 @@ how to run.
 
 1. first run the program (must be compiled) 
 2. then paste your source file directory. it will create a .s file with the same name.
-3. then compile the .s with gcc using gcc -m32 <filename.s> -o <your desired output name>
+3. then compile the .s asembly file with gcc using gcc -m32 <filename.s> -o <your desired output name>
