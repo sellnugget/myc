@@ -28,7 +28,7 @@ namespace Parse {
 	bool Parser::IsUranaryExp()
 	{
 		vector<TokenType> uranary = {
-			NEGATION, BITWISE_COMPLEMENT, LOGICAL_NEGATION
+			NEGATION, BITWISE_COMPLEMENT, LOGICAL_NEGATION, MULTIPLY
 		};
 		if (std::count(uranary.begin(), uranary.end(), _currentToken->type)) {
 			return true;
@@ -38,12 +38,34 @@ namespace Parse {
 	bool Parser::IsConstExp()
 	{
 		vector<TokenType> consts = {
-			INTEGER_LITERAL
+			INTEGER_LITERAL, STRING_LITERAL
 		};
 		if (std::count(consts.begin(), consts.end(), _currentToken->type)) {
 			return true;
 		}
 		return false;
+	}
+
+	bool Parser::IsVar()
+	{
+		switch (_currentToken->type) {
+		case INT:
+			return true;
+		case CHAR:
+			return true;
+		}
+		return false;
+	}
+
+	int Parser::GetTypeSize(TokenType tokentype)
+	{
+		switch (tokentype) {
+		case INT:
+			return 4;
+		case CHAR:
+			return 1;
+		}
+		return 0;
 	}
 
 	Node* Parser::DeclareFactor()
@@ -71,31 +93,58 @@ namespace Parse {
 		}
 		else if (_currentToken->type == IDENTIFIER) {
 			PushToken(out);
+			if (_currentToken->type == OPEN_BRACKET) {
+				out->type = "Call";
+				_currentToken++;
+				bool mustcomma = 0;
+				while (_currentToken->type != CLOSE_BRACKET) {
+					out->Nodes.push_back(DeclareExp(0));
+					if (_currentToken->type == COMMA) {
+						_currentToken++;
+						mustcomma = 1;
+					}
+					else {
+						mustcomma = 0;
+					}
+				}
+				_currentToken++;
+				if (mustcomma == 1) {
+					ReportError(*_currentToken, WHITESPACE, "must put expression after comma");
+				}
+			}
+		
 			return out;
 		}
-		//error
-		exit(13);
+		ReportError(*_currentToken);
 	}
+
+
 
 	
 	Node* Parser::DeclareExp(int level) {
 
+		Node* out = new Node();
+		out->type = "Expression";
 
 		vector<vector<TokenType>> OperatorPrecedence = {
-			{ASSIGNMENT},
+			{ASSIGNMENT, ADD_ASSIGN, SUB_ASSIGN, MULTIPLY_ASSIGN, DIVIDE_ASSIGN, 
+			MOD_ASSIGN, LSHIFT_ASSIGN, RSHIFT_ASSIGN, AND_ASSIGN, XOR_ASSIGN, OR_ASSIGN},
 			{OR},
 			{AND},
+			{BITOR},
+			{XOR},
+			{BITAND},
 			{EQUAL, NOT_EQUAL},
 			{GREATER_THAN, LESS_THAN, GREATER_OR_EQUAL, LESS_OR_EQUAL},
+			{LSHIFT, RSHIFT},
 			{ADD, SUBTRACT},
-			{MULTIPLY, DIVIDE}
+			{MULTIPLY, DIVIDE, MOD}
 		};
 
 		if (level == OperatorPrecedence.size()) {
 			return DeclareFactor();
 		}
-		Node* out = new Node();
-		out->type = "Expression";
+
 		
 		
 		
@@ -118,50 +167,174 @@ namespace Parse {
 		return out;
 	}
 
-	Node* Parser::DeclareVar()
+	Node* Parser::DeclareVar(int size)
 	{
 		Node* out = new Node();
 		out->type = "Var1";
-
+		currentscope += size;
+		ReportError(*_currentToken, IDENTIFIER);
 		PushToken(out);
-		PushToken(out);
-		if (_currentToken->type != SEMICOLIN) {
+		if (_currentToken->type != COMMA && _currentToken->type != SEMICOLIN) {
 			_currentToken--;
 				out->Nodes.push_back(DeclareExp(0));
 		}
-		_currentToken++;
 		return out;
 	}
-
+	Node* Parser::DeclareType()
+	{
+		return nullptr;
+	}
 
 	Node* Parser::DeclareStatement()
 	{
+		
 		Node* out = new Node();
-		if (_currentToken->type == OPEN_BRACE) {
-			out->type = "Scope";
-			_currentToken++;
-			while (_currentToken->type != CLOSE_BRACE) {
-				out->Nodes.push_back(DeclareStatement());
-			}
-			_currentToken++;
-		}
-		else if (_currentToken->type == RETURN) {
-			out->type = "return";
-			PushToken(out);
-			out->Nodes.push_back(DeclareExp(0));
-		}
-		else if (_currentToken->type == INT) {
+
+
+		if (IsVar()) {
 			out->type = "Var";
 			PushToken(out);
-			PushToken(out);
-			out->Nodes.push_back(DeclareVar());
-		}
-		else {
-			DeclareExp(0);
-			if (_currentToken->type != SEMICOLIN) {
-				exit(69);
+			int ptr = 0;
+			while (_currentToken->type == MULTIPLY) {
+				ptr++;
+				_currentToken++;
 			}
-			_currentToken++;
+			int typesize = GetTypeSize(out->terminals[0].type);
+			if (ptr > 0) {
+				typesize = 4;
+			}
+			//how much pointer is it?
+			out->terminals.push_back({INTEGER_LITERAL, std::to_string(ptr), 0});
+			while (_currentToken->type != SEMICOLIN) {
+				
+				out->Nodes.push_back(DeclareVar(typesize));
+				if (_currentToken->type == COMMA) {
+					_currentToken++;
+				}
+				else if (_currentToken->type != SEMICOLIN) {
+					ReportError(*_currentToken, SEMICOLIN);
+				}
+
+			}
+			
+			return out;
+		}
+
+		switch (_currentToken->type) {
+			case OPEN_BRACE:
+				out->type = "Scope";
+				scopes.push(currentscope);
+				currentscope = 0;
+				_currentToken++;
+				while (_currentToken->type != CLOSE_BRACE) {
+					out->Nodes.push_back(DeclareStatement());
+				}
+				out->terminals.push_back({ INTEGER_LITERAL, std::to_string(currentscope), 0 });
+				_currentToken++;
+				currentscope = scopes.top();
+				scopes.pop();
+				break;
+
+			case RETURN:
+				out->type = "Return";
+				_currentToken++;
+				out->Nodes.push_back(DeclareExp(0));
+				ReportError(*_currentToken, SEMICOLIN);
+				_currentToken++;
+				break;
+
+			case IF:
+				out->type = "IF";
+				_currentToken++;
+				ReportError(*_currentToken, OPEN_BRACKET);
+				_currentToken++;
+				out->Nodes.push_back(DeclareExp(0));
+				ReportError(*_currentToken, CLOSE_BRACKET);
+				_currentToken++;
+				out->Nodes.push_back(DeclareStatement());
+
+				if (_currentToken->type == ELSE) {
+					PushToken(out);
+					out->Nodes.push_back(DeclareStatement());
+				}
+				break;
+
+			case FOR:
+				out->type = "Scope";
+				scopes.push(currentscope);
+				currentscope = 0;
+				{
+					Node* fornode = new Node();
+					fornode->type = "FOR";
+					_currentToken++;
+					ReportError(*_currentToken, OPEN_BRACKET);
+					_currentToken++;
+					fornode->Nodes.push_back(DeclareStatement());
+					fornode->Nodes.push_back(DeclareExp(0));
+					ReportError(*_currentToken, SEMICOLIN);
+					_currentToken++;
+					fornode->Nodes.push_back(DeclareExp(0));
+					ReportError(*_currentToken, CLOSE_BRACKET);
+					_currentToken++;
+					fornode->Nodes.push_back(DeclareStatement());
+					out->Nodes.push_back(fornode);
+					out->terminals.push_back({ INTEGER_LITERAL, std::to_string(currentscope), 0 });
+					currentscope = scopes.top();
+					scopes.pop();
+
+				}
+				break;
+			
+			case WHILE:
+				out->type = "WHILE";
+				_currentToken++;
+				ReportError(*_currentToken, OPEN_BRACKET);
+				_currentToken++;
+				out->Nodes.push_back(DeclareExp(0));
+				ReportError(*_currentToken, CLOSE_BRACKET);
+				_currentToken++;
+				out->Nodes.push_back(DeclareStatement());
+				break;
+			case DO:
+				out->type = "DO";
+				_currentToken++;
+				out->Nodes.push_back(DeclareStatement());
+				ReportError(*_currentToken, WHILE);
+				_currentToken++;
+				ReportError(*_currentToken, OPEN_BRACKET);
+				_currentToken++;
+				out->Nodes.push_back(DeclareExp(0));
+				ReportError(*_currentToken, CLOSE_BRACKET);
+				_currentToken++;
+				ReportError(*_currentToken, SEMICOLIN);
+				_currentToken++;
+				break;
+			case BREAK:
+				out->type = "BREAK";
+				PushToken(out);
+				ReportError(*_currentToken, SEMICOLIN);
+				_currentToken++;
+				break;
+			case CONTINUE:
+				out->type = "CONTINUE";
+				PushToken(out);
+				ReportError(*_currentToken, SEMICOLIN);
+				_currentToken++;
+				break;
+			default:
+			
+				if (_currentToken->type == SEMICOLIN) {
+					_currentToken++;
+					Node* empty = new Node();
+					empty->terminals.push_back({ INTEGER_LITERAL, "1", 0 });
+					empty->type = "Factor";
+					out->Nodes.push_back(empty);
+					break;
+				}
+				delete out;
+				out = DeclareExp(0);
+				ReportError(*_currentToken, SEMICOLIN);
+				_currentToken++;
 		}
 
 		return out;
@@ -171,29 +344,61 @@ namespace Parse {
 		Node* out = new Node();
 		out->type = "Function";
 		
+
+		//return type
 		_currentToken++;
+		
 		//pushes name
 		PushToken(out);
 
 		//skips brackets
+		ReportError(*_currentToken, OPEN_BRACKET);
 		_currentToken++;
-		_currentToken++;
-		out->Nodes.push_back(DeclareStatement());
-		_currentToken++;
+		
+		//get function args
+		if (_currentToken->type == CLOSE_BRACKET) {
+			_currentToken++;
+			goto skip_args;
+		}
+		while (1) {
+			ReportError(*_currentToken, INT);
+			_currentToken++;
+			ReportError(*_currentToken, IDENTIFIER);
+			PushToken(out);
+			if (_currentToken->type == COMMA) {
+				_currentToken++;
+				continue;
+			}
+			else if (_currentToken->type == CLOSE_BRACKET) {
+				_currentToken++;
+				break;
+			}
+			else {
+				ReportError(*_currentToken);
+			}
+		}
+		skip_args:
+		if (_currentToken->type == SEMICOLIN) {
+			_currentToken++;
+			out->type = "Forward_Declare";
+		}
+		else {
+			out->Nodes.push_back(DeclareStatement());
+		}
+		
 
 		return out;
 	}
 	Node* Parser::DeclareProgram()
-	{
+	{ 
 		Node* out = new Node();
 		out->type = "Program";
-
-		if (ReadSequence({ INT, IDENTIFIER, OPEN_BRACKET, CLOSE_BRACKET, OPEN_BRACE })) {
-			out->Nodes.push_back(DeclareFunction());
+		while (_currentToken != _end &&  _currentToken->type == INT) {
+			if (_currentToken->type == INT) {
+				out->Nodes.push_back(DeclareFunction());
+			}
 		}
-		else {
-			throw("Error");
-		}
+		
 
 		return out;
 	}

@@ -10,6 +10,7 @@
 int main()
 {
 	std::ifstream myfile;
+	std::cout << "enter compile path. you will need gcc to create a executable\n";
 	std::string input = "TestProgram.myc";
 	myfile.open(input);
 	std::string sourcefile;

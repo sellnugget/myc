@@ -1,7 +1,23 @@
 
+
+int putchar(int c);
+
+int printf(int charptr, int a);
+
+int malloc(int amount);
+
+
 int main() {
-	
-	int a = 1;
-	a = 1;
-	return 10 * 3 + 2;
+
+
+	int current = 1;
+	int last = 0;
+	while(current > 0)
+	{
+		int newnumber = last + current;
+		printf("%d\n", newnumber);
+		last = current;
+		current = newnumber;
+	}
+	while(1){}
 }
