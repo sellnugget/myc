@@ -6,7 +6,7 @@ you can still create arrays by defining int malloc(int amount) then just call th
 
 int ptr = malloc(1000);
 
-then just dereference it *(ptr + 0) = ptr[0], *(ptr + 4) = ptr[4]. although the dereferce is quite broken and i have to fix it.
+then just dereference it *(ptr + 0) = ptr[0], *(ptr + 4) = ptr[1]. although the dereferce is quite broken and i have to fix it.
 
 
 other then that almost everything you'd expect works. binary operations, + / - * % & | > < etc... are supported. 
