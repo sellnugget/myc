@@ -1,8 +1,9 @@
 Hi i wrote this compiler in my spare time. 
 
-this c compiler is missing some critical features such as arrays and dedicated types for points chars etc. 
+this includes many of the features of the c lanaguge with only a few missing. 
+main goal was to learn how to lexers parsing and just how compilers work as well as learning some x86 asembly language
 
-you can still create arrays by defining int malloc(int amount) then just call the function and making a int equal to it.
+you can create arrays by defining int malloc(int amount) then just call the function and making a int equal to it.
 
 int ptr = malloc(1000);
 
